@@ -40,6 +40,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   late Box<Task> _taskBox;
   final List<Task> _tasks = [];
+  final List<dynamic> _taskKeys = [];
   final TextEditingController _controller = TextEditingController();
   bool _initialized = false;
 
@@ -60,8 +61,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _initHive() async {
     _taskBox = await Hive.openBox<Task>('tasks');
+    final reversedKeys = _taskBox.keys.toList().reversed.toList();
+    final reversedValues = _taskBox.values.toList().reversed.toList();
     setState(() {
-      _tasks.addAll(_taskBox.values.toList().reversed);
+      _tasks.addAll(reversedValues);
+      _taskKeys.addAll(reversedKeys);
       _initialized = true;
     });
   }
@@ -69,23 +73,26 @@ class _MyHomePageState extends State<MyHomePage> {
   void _addTask(String title) {
     if (title.trim().isEmpty) return;
     final task = Task(title: title.trim(), createdAt: DateTime.now());
-    _taskBox.add(task);
+    final key = _taskBox.add(task);
     setState(() {
       _tasks.insert(0, task);
+      _taskKeys.insert(0, key);
     });
   }
 
   void _removeTask(int index) {
-    final task = _tasks[index];
-    final keys = _taskBox.keys.toList();
-    final values = _taskBox.values.toList();
-    final boxIndex = values.indexOf(task);
-    if (boxIndex != -1) {
-      _taskBox.delete(keys[boxIndex]);
-    }
+    _taskBox.delete(_taskKeys[index]);
     setState(() {
       _tasks.removeAt(index);
+      _taskKeys.removeAt(index);
     });
+  }
+
+  void _toggleTask(int index) {
+    final task = _tasks[index];
+    task.isCompleted = !task.isCompleted;
+    _taskBox.put(_taskKeys[index], task);
+    setState(() {});
   }
 
   void _showCreateDialog() {
@@ -187,6 +194,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       itemBuilder: (context, index) {
                         final task = _tasks[index];
                         final pastel = _pastelColors[index % _pastelColors.length];
+                        final completed = task.isCompleted;
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
@@ -212,30 +220,51 @@ class _MyHomePageState extends State<MyHomePage> {
                                 color: pastel,
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Icon(
-                                Icons.check_circle_outline,
-                                color: Color(0xFF7C4DFF),
+                              child: Icon(
+                                completed
+                                    ? Icons.check_circle
+                                    : Icons.check_circle_outline,
+                                color: completed
+                                    ? Colors.green
+                                    : const Color(0xFF7C4DFF),
                               ),
                             ),
                             title: Text(
                               task.title,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                                color: completed ? Colors.black38 : Colors.black87,
+                                decoration: completed
+                                    ? TextDecoration.lineThrough
+                                    : null,
                               ),
                             ),
                             subtitle: Text(
                               _formatDate(task.createdAt),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.black45,
+                                color: completed ? Colors.black26 : Colors.black45,
                               ),
                             ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              color: Colors.black38,
-                              onPressed: () => _removeTask(index),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    completed
+                                        ? Icons.check_box
+                                        : Icons.check_box_outline_blank,
+                                    color: const Color(0xFF7C4DFF),
+                                  ),
+                                  onPressed: () => _toggleTask(index),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  color: Colors.black38,
+                                  onPressed: () => _removeTask(index),
+                                ),
+                              ],
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24),
