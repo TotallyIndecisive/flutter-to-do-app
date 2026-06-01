@@ -43,6 +43,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final List<dynamic> _taskKeys = [];
   final TextEditingController _controller = TextEditingController();
   bool _initialized = false;
+  bool _sortNewestFirst = true;
 
   static const List<Color> _pastelColors = [
     Color(0xFFE8E0F0),
@@ -61,11 +62,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _initHive() async {
     _taskBox = await Hive.openBox<Task>('tasks');
-    final reversedKeys = _taskBox.keys.toList().reversed.toList();
-    final reversedValues = _taskBox.values.toList().reversed.toList();
     setState(() {
-      _tasks.addAll(reversedValues);
-      _taskKeys.addAll(reversedKeys);
+      _tasks.addAll(_taskBox.values);
+      _taskKeys.addAll(_taskBox.keys);
+      _applySort();
       _initialized = true;
     });
   }
@@ -75,9 +75,30 @@ class _MyHomePageState extends State<MyHomePage> {
     final task = Task(title: title.trim(), createdAt: DateTime.now());
     final key = _taskBox.add(task);
     setState(() {
-      _tasks.insert(0, task);
-      _taskKeys.insert(0, key);
+      _tasks.add(task);
+      _taskKeys.add(key);
+      _applySort();
     });
+  }
+
+  void _setSortOrder(bool newestFirst) {
+    setState(() {
+      _sortNewestFirst = newestFirst;
+      _applySort();
+    });
+  }
+
+  void _applySort() {
+    final combined = <MapEntry<dynamic, Task>>[
+      for (var i = 0; i < _tasks.length; i++) MapEntry(_taskKeys[i], _tasks[i]),
+    ];
+    combined.sort((a, b) => _sortNewestFirst
+        ? b.value.createdAt.compareTo(a.value.createdAt)
+        : a.value.createdAt.compareTo(b.value.createdAt));
+    for (var i = 0; i < combined.length; i++) {
+      _taskKeys[i] = combined[i].key;
+      _tasks[i] = combined[i].value;
+    }
   }
 
   void _removeTask(int index) {
@@ -131,12 +152,15 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDateTime(DateTime date) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
+    final minute = date.minute.toString().padLeft(2, '0');
+    final amPm = date.hour < 12 ? 'AM' : 'PM';
+    return '${months[date.month - 1]} ${date.day}, ${date.year}  $hour:$minute $amPm';
   }
 
   @override
@@ -175,7 +199,38 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('Newest'),
+                    selected: _sortNewestFirst,
+                    onSelected: (_) => _setSortOrder(true),
+                    shape: const StadiumBorder(),
+                    selectedColor: const Color(0xFF7C4DFF),
+                    labelStyle: TextStyle(
+                      color: _sortNewestFirst ? Colors.white : Colors.black87,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('Oldest'),
+                    selected: !_sortNewestFirst,
+                    onSelected: (_) => _setSortOrder(false),
+                    shape: const StadiumBorder(),
+                    selectedColor: const Color(0xFF7C4DFF),
+                    labelStyle: TextStyle(
+                      color: !_sortNewestFirst ? Colors.white : Colors.black87,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             Expanded(
               child: !_initialized
                   ? const Center(child: CircularProgressIndicator())
@@ -241,7 +296,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               ),
                             ),
                             subtitle: Text(
-                              _formatDate(task.createdAt),
+                              _formatDateTime(task.createdAt),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: completed ? Colors.black26 : Colors.black45,

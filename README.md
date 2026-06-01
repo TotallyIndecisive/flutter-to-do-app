@@ -5,12 +5,14 @@ A minimal, modern to-do app built with Flutter and Material 3, inspired by premi
 ## Features
 
 - **Create tasks** — FloatingActionButton opens a dialog to enter a new task
-- **Task list** — Scrollable list of task cards with pastel leading icons, title, and date
+- **Task list** — Scrollable list of task cards with pastel leading icons, title, date, and time
 - **Complete tasks** — Checkbox toggles task completion, crossing out the text with grey styling
 - **Delete tasks** — Delete icon removes a task from the list and storage
 - **Persistent storage** — All tasks are saved to a local Hive database and survive restarts
 - **Empty state** — Friendly "No tasks yet" message when the list is empty
 - **Task count** — Live count displayed below the header
+- **12-hour time** — Each task displays its creation time (e.g., `02:30 AM`)
+- **Sort toggle** — Circular toggle buttons (Newest / Oldest) below the header to reorder the list
 
 ## Prerequisites
 
