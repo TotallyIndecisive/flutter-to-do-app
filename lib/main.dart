@@ -52,6 +52,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isSearching = false;
   String _searchQuery = '';
   FilterType _currentFilter = FilterType.all;
+  double _fabScale = 1.0;
 
   List<Task> get _filteredTasks {
     return _tasks.where((task) {
@@ -88,13 +89,19 @@ class _MyHomePageState extends State<MyHomePage> {
     if (mounted) setState(() {});
   }
 
-  void _addTask(String title, {TaskCategory category = TaskCategory.other}) {
+  void _addTask(String title, {
+    TaskCategory category = TaskCategory.other,
+    String? customCategory,
+    TaskColor taskColor = TaskColor.purple,
+  }) {
     if (title.trim().isEmpty) return;
     final task = Task(
       id: _generateId(),
       title: title.trim(),
       createdAt: DateTime.now(),
       category: category,
+      customCategory: customCategory,
+      taskColor: taskColor,
     );
     final key = _taskBox.add(task);
     _tasks.add(task);
@@ -271,7 +278,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _showCreateDialog() {
     _controller.clear();
-    TaskCategory selectedCategory = TaskCategory.other;
+    TaskColor selectedColor = TaskColor.purple;
+    final customCatController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) {
@@ -279,9 +287,18 @@ class _MyHomePageState extends State<MyHomePage> {
           builder: (ctx, setDialogState) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(24),
               ),
-              title: const Text('Create Task'),
+              contentPadding: const EdgeInsets.all(24),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              title: const Text(
+                'Create Task',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1C1B1F),
+                ),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -289,67 +306,91 @@ class _MyHomePageState extends State<MyHomePage> {
                     controller: _controller,
                     autofocus: true,
                     decoration: const InputDecoration(
-                      labelText: 'Task Name',
+                      hintText: 'Enter task name…',
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                     onSubmitted: (value) {
-                      _addTask(value, category: selectedCategory);
+                      _addTask(
+                        value,
+                        customCategory: customCatController.text,
+                        taskColor: selectedColor,
+                      );
                       Navigator.pop(ctx);
                     },
                   ),
-                  const SizedBox(height: 16),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Category',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: TaskCategory.values.map((cat) {
-                      final selected = selectedCategory == cat;
-                      return ChoiceChip(
-                        label: Text(cat.label),
-                        selected: selected,
-                        onSelected: (_) {
-                          setDialogState(() => selectedCategory = cat);
-                        },
-                        selectedColor: cat.color.withOpacity(0.2),
-                        labelStyle: TextStyle(
-                          color: selected ? cat.color : const Color(0xFF6B7280),
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                          fontSize: 13,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        side: BorderSide(
-                          color: selected
-                              ? cat.color
-                              : const Color(0xFF6B7280).withOpacity(0.3),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: TaskColor.values.map((c) {
+                      final selected = selectedColor == c;
+                      return GestureDetector(
+                        onTap: () => setDialogState(() => selectedColor = c),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: c.color,
+                            shape: BoxShape.circle,
+                            border: selected
+                                ? Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  )
+                                : null,
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                      color: c.color.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: selected
+                              ? const Icon(Icons.check, color: Colors.white, size: 22)
+                              : null,
                         ),
                       );
                     }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: customCatController,
+                    maxLength: 20,
+                    decoration: const InputDecoration(
+                      hintText: 'Custom category (optional)',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      counterText: '',
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
                   ),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF6B7280),
+                  ),
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
                   onPressed: () {
-                    _addTask(_controller.text, category: selectedCategory);
+                    _addTask(
+                      _controller.text,
+                      customCategory: customCatController.text,
+                      taskColor: selectedColor,
+                    );
                     Navigator.pop(ctx);
                   },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF6750A4),
+                  ),
                   child: const Text('Create'),
                 ),
               ],
@@ -548,11 +589,25 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateDialog,
-        backgroundColor: const Color(0xFF6750A4),
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add),
+      floatingActionButton: GestureDetector(
+        onTapDown: (_) => setState(() => _fabScale = 0.92),
+        onTapUp: (_) => setState(() => _fabScale = 1.0),
+        onTapCancel: () => setState(() => _fabScale = 1.0),
+        child: AnimatedScale(
+          scale: _fabScale,
+          duration: const Duration(milliseconds: 100),
+          child: SizedBox(
+            width: 64,
+            height: 64,
+            child: FloatingActionButton(
+              onPressed: _showCreateDialog,
+              backgroundColor: const Color(0xFF6750A4),
+              foregroundColor: Colors.white,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add, size: 28),
+            ),
+          ),
+        ),
       ),
     );
   }

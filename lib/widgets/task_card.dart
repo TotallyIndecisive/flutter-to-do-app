@@ -16,6 +16,7 @@ class TaskCard extends StatelessWidget {
     final completed = task.isCompleted;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -27,52 +28,66 @@ class TaskCard extends StatelessWidget {
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.only(left: 8, right: 16, top: 4, bottom: 4),
-        leading: Checkbox(
-          value: completed,
-          onChanged: (_) => onToggle(),
-          activeColor: const Color(0xFF6750A4),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            color: task.displayColor,
           ),
-        ),
-        title: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            task.title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: completed
-                  ? const Color(0xFF6B7280).withOpacity(0.5)
-                  : const Color(0xFF1C1B1F),
-              decoration: completed ? TextDecoration.lineThrough : null,
-            ),
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _formatTimestamp(task.createdAt),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: completed
-                      ? const Color(0xFF6B7280).withOpacity(0.4)
-                      : const Color(0xFF6B7280),
+          Expanded(
+            child: ListTile(
+              contentPadding: const EdgeInsets.only(left: 12, right: 16, top: 4, bottom: 4),
+              leading: Checkbox(
+                value: completed,
+                onChanged: (_) => onToggle(),
+                activeColor: const Color(0xFF6750A4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
-              const SizedBox(height: 4),
-              _CategoryBadge(category: task.category, completed: completed),
-            ],
+              title: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: completed
+                        ? const Color(0xFF6B7280).withOpacity(0.5)
+                        : const Color(0xFF1C1B1F),
+                    decoration: completed ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _formatTimestamp(task.createdAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: completed
+                            ? const Color(0xFF6B7280).withOpacity(0.4)
+                            : const Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _CategoryBadge(
+                      label: task.displayCategory,
+                      color: task.displayColor,
+                      completed: completed,
+                    ),
+                  ],
+                ),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
           ),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        ],
       ),
     );
   }
@@ -104,10 +119,15 @@ class TaskCard extends StatelessWidget {
 }
 
 class _CategoryBadge extends StatelessWidget {
-  final TaskCategory category;
+  final String label;
+  final Color color;
   final bool completed;
 
-  const _CategoryBadge({required this.category, required this.completed});
+  const _CategoryBadge({
+    required this.label,
+    required this.color,
+    required this.completed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -115,15 +135,15 @@ class _CategoryBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: category.color.withOpacity(completed ? 0.05 : 0.12),
+        color: color.withOpacity(completed ? 0.05 : 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        category.label,
+        label,
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          color: category.color.withOpacity(opacity),
+          color: color.withOpacity(opacity),
         ),
       ),
     );

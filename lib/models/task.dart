@@ -43,12 +43,49 @@ extension TaskCategoryExtension on TaskCategory {
   }
 }
 
+enum TaskColor {
+  green,
+  red,
+  blue,
+  purple,
+}
+
+extension TaskColorExtension on TaskColor {
+  Color get color {
+    switch (this) {
+      case TaskColor.green:
+        return const Color(0xFF4CAF50);
+      case TaskColor.red:
+        return const Color(0xFFF44336);
+      case TaskColor.blue:
+        return const Color(0xFF2196F3);
+      case TaskColor.purple:
+        return const Color(0xFF7E57C2);
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case TaskColor.green:
+        return 'Green';
+      case TaskColor.red:
+        return 'Red';
+      case TaskColor.blue:
+        return 'Blue';
+      case TaskColor.purple:
+        return 'Purple';
+    }
+  }
+}
+
 class Task {
   final String id;
   final String title;
   final DateTime createdAt;
   bool isCompleted;
   TaskCategory category;
+  String? customCategory;
+  TaskColor taskColor;
 
   Task({
     required this.id,
@@ -56,7 +93,16 @@ class Task {
     required this.createdAt,
     this.isCompleted = false,
     this.category = TaskCategory.other,
+    this.customCategory,
+    this.taskColor = TaskColor.purple,
   });
+
+  String get displayCategory =>
+      (customCategory != null && customCategory!.trim().isNotEmpty)
+          ? customCategory!.trim()
+          : category.label;
+
+  Color get displayColor => taskColor.color;
 
   @override
   bool operator ==(Object other) =>
@@ -92,12 +138,29 @@ class TaskAdapter extends TypeAdapter<Task> {
         orElse: () => TaskCategory.other,
       );
     } catch (_) {}
+    String? customCategory;
+    try {
+      final hasCustom = reader.readBool();
+      if (hasCustom) {
+        customCategory = reader.readString();
+      }
+    } catch (_) {}
+    TaskColor taskColor = TaskColor.purple;
+    try {
+      final colorStr = reader.readString();
+      taskColor = TaskColor.values.firstWhere(
+        (c) => c.name == colorStr,
+        orElse: () => TaskColor.purple,
+      );
+    } catch (_) {}
     return Task(
       id: id,
       title: title,
       createdAt: createdAt,
       isCompleted: isCompleted,
       category: category,
+      customCategory: customCategory,
+      taskColor: taskColor,
     );
   }
 
@@ -108,5 +171,10 @@ class TaskAdapter extends TypeAdapter<Task> {
     writer.writeBool(obj.isCompleted);
     writer.writeString(obj.id);
     writer.writeString(obj.category.name);
+    writer.writeBool(obj.customCategory != null && obj.customCategory!.trim().isNotEmpty);
+    if (obj.customCategory != null && obj.customCategory!.trim().isNotEmpty) {
+      writer.writeString(obj.customCategory!.trim());
+    }
+    writer.writeString(obj.taskColor.name);
   }
 }
