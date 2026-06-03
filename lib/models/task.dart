@@ -1,11 +1,20 @@
+import 'dart:math';
 import 'package:hive/hive.dart';
 
+String _generateId() {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  final random = Random();
+  return List.generate(16, (_) => chars[random.nextInt(chars.length)]).join();
+}
+
 class Task {
+  final String id;
   final String title;
   final DateTime createdAt;
   bool isCompleted;
 
   Task({
+    required this.id,
     required this.title,
     required this.createdAt,
     this.isCompleted = false,
@@ -24,7 +33,13 @@ class TaskAdapter extends TypeAdapter<Task> {
     try {
       isCompleted = reader.readBool();
     } catch (_) {}
-    return Task(title: title, createdAt: createdAt, isCompleted: isCompleted);
+    String id;
+    try {
+      id = reader.readString();
+    } catch (_) {
+      id = _generateId();
+    }
+    return Task(id: id, title: title, createdAt: createdAt, isCompleted: isCompleted);
   }
 
   @override
@@ -32,5 +47,6 @@ class TaskAdapter extends TypeAdapter<Task> {
     writer.writeString(obj.title);
     writer.writeInt(obj.createdAt.millisecondsSinceEpoch);
     writer.writeBool(obj.isCompleted);
+    writer.writeString(obj.id);
   }
 }

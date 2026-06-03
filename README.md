@@ -1,18 +1,32 @@
-# To-Do Flutter Application — v1.0
+# To-Do Flutter Application — v1.2
 
-A minimal, modern to-do app built with Flutter and Material 3, inspired by premium productivity apps. Data is persisted locally using Hive.
+A minimalist, productivity-focused to-do app built with Flutter and Material 3. Data is persisted locally using Hive.
 
 ## Features
 
-- **Create tasks** — FloatingActionButton opens a dialog to enter a new task
-- **Task list** — Scrollable list of task cards with pastel leading icons, title, date, and time
-- **Complete tasks** — Checkbox toggles task completion, crossing out the text with grey styling
-- **Delete tasks** — Delete icon removes a task from the list and storage
-- **Persistent storage** — All tasks are saved to a local Hive database and survive restarts
-- **Empty state** — Friendly "No tasks yet" message when the list is empty
-- **Task count** — Live count displayed below the header
-- **12-hour time** — Each task displays its creation time (e.g., `02:30 AM`)
-- **Sort toggle** — Circular toggle buttons (Newest / Oldest) below the header to reorder the list
+- **Create tasks** — FAB opens a dialog; tasks saved immediately to Hive
+- **Complete tasks** — Checkbox toggles completion; strikethrough + reduced opacity
+- **Delete tasks** — Confirmation dialog before permanent deletion
+- **Sort** — Toggle button in the top-right header; newest first / oldest first
+- **Persistent storage** — Hive database survives app close, restart, device reboot
+- **Empty state** — Centred icon with "No Tasks Yet" and helper text
+- **Task counter** — Live count displayed beneath the "My Tasks" header
+- **Humanized timestamps** — 24-hour format: "Today • 14:22", "Yesterday • 09:30", "12 Jun 2026 • 08:15"
+
+## Design System
+
+| Token           | Value     |
+|-----------------|-----------|
+| Background      | `#F5F5F7` |
+| Primary         | `#6750A4` |
+| Cards           | `#FFFFFF` |
+| Primary Text    | `#1C1B1F` |
+| Secondary Text  | `#6B7280` |
+| Delete Action   | `#D32F2F` |
+
+- Card shape: 16px rounded corners, soft shadow (4px blur, 2px offset, 4% opacity)
+- No gradients, no glassmorphism, no excessive shadows
+- Optimised for Samsung Galaxy A55
 
 ## Prerequisites
 
@@ -51,14 +65,19 @@ adb shell run-as com.example.test_app ls /data/data/com.example.test_app/app_flu
 
 ```
 lib/
-  main.dart           — App entry point, UI, and state management
+  main.dart            — App entry point, UI, and state management
   models/
-    task.dart         — Task model and Hive TypeAdapter
+    task.dart          — Task model (id, title, createdAt, isCompleted) and Hive TypeAdapter
+  widgets/
+    task_card.dart     — Reusable TaskCard widget with timestamp formatting
 ```
 
 ## Technical Notes
 
 - StatefulWidget for local state management
+- `AnimatedList` with `SizeTransition` for Material motion on card insert/remove
 - Hive with a manual TypeAdapter (no code generation required)
-- Material 3 design with custom color scheme (#F6F3FA background, #7C4DFF primary)
-- Backward-compatible Hive reads for the `isCompleted` field
+- Backward-compatible Hive reads for `isCompleted` and `id` fields
+- Task `id` generated using timestamp + random alphanumeric string
+- Empty task names prevented; whitespace trimmed automatically
+- Single-page architecture — no bottom nav, no settings, no secondary screens

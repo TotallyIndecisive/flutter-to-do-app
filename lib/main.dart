@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'models/task.dart';
+import 'widgets/task_card.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,14 +16,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'My To-Do',
+      title: 'My Tasks',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7C4DFF),
-          surface: const Color(0xFFF6F3FA),
+          seedColor: const Color(0xFF6750A4),
+          surface: const Color(0xFFF5F5F7),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF6F3FA),
+        scaffoldBackgroundColor: const Color(0xFFF5F5F7),
         useMaterial3: true,
       ),
       home: const MyHomePage(),
@@ -38,21 +39,13 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   late Box<Task> _taskBox;
   final List<Task> _tasks = [];
   final List<dynamic> _taskKeys = [];
   final TextEditingController _controller = TextEditingController();
   bool _initialized = false;
   bool _sortNewestFirst = true;
-
-  static const List<Color> _pastelColors = [
-    Color(0xFFE8E0F0),
-    Color(0xFFFCE4EC),
-    Color(0xFFE0F7FA),
-    Color(0xFFFFF3E0),
-    Color(0xFFE8F5E9),
-    Color(0xFFF3E5F5),
-  ];
 
   @override
   void initState() {
@@ -62,28 +55,88 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _initHive() async {
     _taskBox = await Hive.openBox<Task>('tasks');
-    setState(() {
-      _tasks.addAll(_taskBox.values);
-      _taskKeys.addAll(_taskBox.keys);
-      _applySort();
-      _initialized = true;
-    });
+    _tasks.addAll(_taskBox.values);
+    _taskKeys.addAll(_taskBox.keys);
+    _applySort();
+    _initialized = true;
+    if (mounted) setState(() {});
   }
 
   void _addTask(String title) {
     if (title.trim().isEmpty) return;
-    final task = Task(title: title.trim(), createdAt: DateTime.now());
+    final task = Task(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title.trim(),
+      createdAt: DateTime.now(),
+    );
     final key = _taskBox.add(task);
-    setState(() {
-      _tasks.add(task);
-      _taskKeys.add(key);
-      _applySort();
-    });
+    _tasks.add(task);
+    _taskKeys.add(key);
+    _applySort();
+    _listKey.currentState?.insertItem(
+      _tasks.indexOf(task),
+    );
+    setState(() {});
   }
 
-  void _setSortOrder(bool newestFirst) {
+  void _removeTask(int index) {
+    final removedTask = _tasks[index];
+    _taskBox.delete(_taskKeys[index]);
+    _tasks.removeAt(index);
+    _taskKeys.removeAt(index);
+    _listKey.currentState?.removeItem(
+      index,
+      (context, animation) => SizeTransition(
+        sizeFactor: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+        child: TaskCard(
+          task: removedTask,
+          onToggle: () {},
+          onDelete: () {},
+        ),
+      ),
+    );
+    setState(() {});
+  }
+
+  void _confirmDelete(int index) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Delete Task'),
+        content: const Text('Are you sure you want to delete this task?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _removeTask(index);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD32F2F),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleTask(int index) {
+    final task = _tasks[index];
+    task.isCompleted = !task.isCompleted;
+    _taskBox.put(_taskKeys[index], task);
+    setState(() {});
+  }
+
+  void _toggleSort() {
     setState(() {
-      _sortNewestFirst = newestFirst;
+      _sortNewestFirst = !_sortNewestFirst;
       _applySort();
     });
   }
@@ -101,21 +154,6 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _removeTask(int index) {
-    _taskBox.delete(_taskKeys[index]);
-    setState(() {
-      _tasks.removeAt(index);
-      _taskKeys.removeAt(index);
-    });
-  }
-
-  void _toggleTask(int index) {
-    final task = _tasks[index];
-    task.isCompleted = !task.isCompleted;
-    _taskBox.put(_taskKeys[index], task);
-    setState(() {});
-  }
-
   void _showCreateDialog() {
     _controller.clear();
     showDialog(
@@ -123,16 +161,20 @@ class _MyHomePageState extends State<MyHomePage> {
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
           ),
-          title: const Text('New Task'),
+          title: const Text('Create Task'),
           content: TextField(
             controller: _controller,
             autofocus: true,
             decoration: const InputDecoration(
-              hintText: 'What do you need to do?',
+              labelText: 'Task Name',
               border: OutlineInputBorder(),
             ),
+            onSubmitted: (value) {
+              _addTask(value);
+              Navigator.pop(context);
+            },
           ),
           actions: [
             TextButton(
@@ -152,17 +194,6 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  String _formatDateTime(DateTime date) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
-    final minute = date.minute.toString().padLeft(2, '0');
-    final amPm = date.hour < 12 ? 'AM' : 'PM';
-    return '${months[date.month - 1]} ${date.day}, ${date.year}  $hour:$minute $amPm';
-  }
-
   @override
   void dispose() {
     _controller.dispose();
@@ -173,7 +204,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F3FA),
+      backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,160 +212,96 @@ class _MyHomePageState extends State<MyHomePage> {
             const SizedBox(height: 48),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'My To-Do',
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                '${_tasks.length} task${_tasks.length == 1 ? '' : 's'}',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.black54,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  ChoiceChip(
-                    label: const Text('Newest'),
-                    selected: _sortNewestFirst,
-                    onSelected: (_) => _setSortOrder(true),
-                    shape: const StadiumBorder(),
-                    selectedColor: const Color(0xFF7C4DFF),
-                    labelStyle: TextStyle(
-                      color: _sortNewestFirst ? Colors.white : Colors.black87,
-                      fontSize: 13,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'My Tasks',
+                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1C1B1F),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_tasks.length} ${_tasks.length == 1 ? 'Task' : 'Tasks'}',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Oldest'),
-                    selected: !_sortNewestFirst,
-                    onSelected: (_) => _setSortOrder(false),
-                    shape: const StadiumBorder(),
-                    selectedColor: const Color(0xFF7C4DFF),
-                    labelStyle: TextStyle(
-                      color: !_sortNewestFirst ? Colors.white : Colors.black87,
-                      fontSize: 13,
+                  IconButton(
+                    icon: Icon(
+                      _sortNewestFirst ? Icons.arrow_downward : Icons.arrow_upward,
                     ),
+                    tooltip: _sortNewestFirst ? 'Newest first' : 'Oldest first',
+                    color: const Color(0xFF6750A4),
+                    onPressed: _toggleSort,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Expanded(
               child: !_initialized
                   ? const Center(child: CircularProgressIndicator())
                   : _tasks.isEmpty
                       ? Center(
-                          child: Text(
-                            'No tasks yet',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.black38,
-                            ),
-                          ),
-                        )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: _tasks.length,
-                      itemBuilder: (context, index) {
-                        final task = _tasks[index];
-                        final pastel = _pastelColors[index % _pastelColors.length];
-                        final completed = task.isCompleted;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.task_alt,
+                                size: 64,
+                                color: const Color(0xFF6B7280).withOpacity(0.4),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No Tasks Yet',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1C1B1F),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Tap + to create your first task',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: const Color(0xFF6B7280).withOpacity(0.7),
+                                ),
                               ),
                             ],
                           ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            leading: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: pastel,
-                                borderRadius: BorderRadius.circular(12),
+                        )
+                      : AnimatedList(
+                          key: _listKey,
+                          initialItemCount: _tasks.length,
+                          padding: const EdgeInsets.only(bottom: 80),
+                          itemBuilder: (context, index, animation) {
+                            return SizeTransition(
+                              sizeFactor: animation,
+                              child: TaskCard(
+                                task: _tasks[index],
+                                onToggle: () => _toggleTask(index),
+                                onDelete: () => _confirmDelete(index),
                               ),
-                              child: Icon(
-                                completed
-                                    ? Icons.check_circle
-                                    : Icons.check_circle_outline,
-                                color: completed
-                                    ? Colors.green
-                                    : const Color(0xFF7C4DFF),
-                              ),
-                            ),
-                            title: Text(
-                              task.title,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: completed ? Colors.black38 : Colors.black87,
-                                decoration: completed
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                            subtitle: Text(
-                              _formatDateTime(task.createdAt),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: completed ? Colors.black26 : Colors.black45,
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    completed
-                                        ? Icons.check_box
-                                        : Icons.check_box_outline_blank,
-                                    color: const Color(0xFF7C4DFF),
-                                  ),
-                                  onPressed: () => _toggleTask(index),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  color: Colors.black38,
-                                  onPressed: () => _removeTask(index),
-                                ),
-                              ],
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
             ),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateDialog,
-        backgroundColor: const Color(0xFF7C4DFF),
+        backgroundColor: const Color(0xFF6750A4),
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
