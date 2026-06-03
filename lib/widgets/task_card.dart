@@ -54,15 +54,22 @@ class TaskCard extends StatelessWidget {
           ),
         ),
         subtitle: Padding(
-          padding: const EdgeInsets.only(top: 2, bottom: 4),
-          child: Text(
-            _formatTimestamp(task.createdAt),
-            style: TextStyle(
-              fontSize: 12,
-              color: completed
-                  ? const Color(0xFF6B7280).withOpacity(0.4)
-                  : const Color(0xFF6B7280),
-            ),
+          padding: const EdgeInsets.only(top: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _formatTimestamp(task.createdAt),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: completed
+                      ? const Color(0xFF6B7280).withOpacity(0.4)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+              const SizedBox(height: 4),
+              _CategoryBadge(category: task.category, completed: completed),
+            ],
           ),
         ),
         trailing: IconButton(
@@ -100,5 +107,32 @@ class TaskCard extends StatelessWidget {
     final minute = date.minute.toString().padLeft(2, '0');
 
     return '$dayLabel • $hour:$minute';
+  }
+}
+
+class _CategoryBadge extends StatelessWidget {
+  final TaskCategory category;
+  final bool completed;
+
+  const _CategoryBadge({required this.category, required this.completed});
+
+  @override
+  Widget build(BuildContext context) {
+    final opacity = completed ? 0.4 : 1.0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: category.color.withOpacity(completed ? 0.05 : 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        category.label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: category.color.withOpacity(opacity),
+        ),
+      ),
+    );
   }
 }

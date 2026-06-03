@@ -31,6 +31,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
+enum FilterType { all, active, completed }
+
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
 
@@ -39,66 +41,96 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   late Box<Task> _taskBox;
   final List<Task> _tasks = [];
-  final List<dynamic> _taskKeys = [];
+  final Map<String, dynamic> _taskKeyMap = {};
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   bool _initialized = false;
   bool _sortNewestFirst = true;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  FilterType _currentFilter = FilterType.all;
+
+  List<Task> get _filteredTasks {
+    return _tasks.where((task) {
+      if (_searchQuery.isNotEmpty &&
+          !task.title.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        return false;
+      }
+      if (_currentFilter == FilterType.active && task.isCompleted) return false;
+      if (_currentFilter == FilterType.completed && !task.isCompleted) return false;
+      return true;
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text);
+    });
     _initHive();
   }
 
   Future<void> _initHive() async {
     _taskBox = await Hive.openBox<Task>('tasks');
-    _tasks.addAll(_taskBox.values);
-    _taskKeys.addAll(_taskBox.keys);
+    for (final key in _taskBox.keys) {
+      final task = _taskBox.get(key);
+      if (task != null) {
+        _tasks.add(task);
+        _taskKeyMap[task.id] = key;
+      }
+    }
     _applySort();
     _initialized = true;
     if (mounted) setState(() {});
   }
 
-  void _addTask(String title) {
+  void _addTask(String title, {TaskCategory category = TaskCategory.other}) {
     if (title.trim().isEmpty) return;
     final task = Task(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _generateId(),
       title: title.trim(),
       createdAt: DateTime.now(),
+      category: category,
     );
     final key = _taskBox.add(task);
     _tasks.add(task);
-    _taskKeys.add(key);
+    _taskKeyMap[task.id] = key;
     _applySort();
-    _listKey.currentState?.insertItem(
-      _tasks.indexOf(task),
-    );
     setState(() {});
   }
 
-  void _removeTask(int index) {
-    final removedTask = _tasks[index];
-    _taskBox.delete(_taskKeys[index]);
-    _tasks.removeAt(index);
-    _taskKeys.removeAt(index);
-    _listKey.currentState?.removeItem(
-      index,
-      (context, animation) => SizeTransition(
-        sizeFactor: CurvedAnimation(parent: animation, curve: Curves.easeIn),
-        child: TaskCard(
-          task: removedTask,
-          onToggle: () {},
-          onDelete: () {},
+  String _generateId() {
+    final now = DateTime.now();
+    return '${now.millisecondsSinceEpoch}_${now.microsecondsSinceEpoch}';
+  }
+
+  void _deleteWithUndo(Task task) {
+    final hiveKey = _taskKeyMap.remove(task.id);
+    _tasks.remove(task);
+    if (hiveKey != null) _taskBox.delete(hiveKey);
+    setState(() {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Task deleted'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            final newKey = _taskBox.add(task);
+            _taskKeyMap[task.id] = newKey;
+            _tasks.add(task);
+            _applySort();
+            setState(() {});
+          },
         ),
       ),
     );
-    setState(() {});
   }
 
-  void _confirmDelete(int index) {
+  void _confirmDelete(Task task) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -115,7 +147,7 @@ class _MyHomePageState extends State<MyHomePage> {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _removeTask(index);
+              _deleteWithUndo(task);
             },
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFD32F2F),
@@ -127,10 +159,9 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  void _toggleTask(int index) {
-    final task = _tasks[index];
+  void _toggleTask(Task task) {
     task.isCompleted = !task.isCompleted;
-    _taskBox.put(_taskKeys[index], task);
+    _taskBox.put(_taskKeyMap[task.id], task);
     setState(() {});
   }
 
@@ -142,53 +173,125 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _applySort() {
-    final combined = <MapEntry<dynamic, Task>>[
-      for (var i = 0; i < _tasks.length; i++) MapEntry(_taskKeys[i], _tasks[i]),
-    ];
-    combined.sort((a, b) => _sortNewestFirst
-        ? b.value.createdAt.compareTo(a.value.createdAt)
-        : a.value.createdAt.compareTo(b.value.createdAt));
-    for (var i = 0; i < combined.length; i++) {
-      _taskKeys[i] = combined[i].key;
-      _tasks[i] = combined[i].value;
+    _tasks.sort((a, b) => _sortNewestFirst
+        ? b.createdAt.compareTo(a.createdAt)
+        : a.createdAt.compareTo(b.createdAt));
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchController.clear();
+        _searchQuery = '';
+      }
+    });
+  }
+
+  void _markAllComplete() {
+    for (final task in _tasks) {
+      task.isCompleted = true;
+      _taskBox.put(_taskKeyMap[task.id], task);
     }
+    setState(() {});
+  }
+
+  void _clearCompleted() {
+    final completed = _tasks.where((t) => t.isCompleted).toList();
+    for (final task in completed) {
+      _taskBox.delete(_taskKeyMap[task.id]);
+      _taskKeyMap.remove(task.id);
+    }
+    _tasks.removeWhere((t) => t.isCompleted);
+    setState(() {});
   }
 
   void _showCreateDialog() {
     _controller.clear();
+    TaskCategory selectedCategory = TaskCategory.other;
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text('Create Task'),
-          content: TextField(
-            controller: _controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Task Name',
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (value) {
-              _addTask(value);
-              Navigator.pop(context);
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                _addTask(_controller.text);
-                Navigator.pop(context);
-              },
-              child: const Text('Create'),
-            ),
-          ],
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Create Task'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Task Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (value) {
+                      _addTask(value, category: selectedCategory);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Category',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: TaskCategory.values.map((cat) {
+                      final selected = selectedCategory == cat;
+                      return ChoiceChip(
+                        label: Text(cat.label),
+                        selected: selected,
+                        onSelected: (_) {
+                          setDialogState(() => selectedCategory = cat);
+                        },
+                        selectedColor: cat.color.withOpacity(0.2),
+                        labelStyle: TextStyle(
+                          color: selected ? cat.color : const Color(0xFF6B7280),
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          fontSize: 13,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide(
+                          color: selected
+                              ? cat.color
+                              : const Color(0xFF6B7280).withOpacity(0.3),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    _addTask(_controller.text, category: selectedCategory);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Create'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -197,12 +300,18 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void dispose() {
     _controller.dispose();
+    _searchController.dispose();
     _taskBox.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final total = _tasks.length;
+    final completedCount = _tasks.where((t) => t.isCompleted).length;
+    final activeCount = total - completedCount;
+    final displayed = _filteredTasks;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
@@ -228,29 +337,115 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${_tasks.length} ${_tasks.length == 1 ? 'Task' : 'Tasks'}',
+                        '$total ${total == 1 ? 'Task' : 'Tasks'}',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: const Color(0xFF6B7280),
                         ),
                       ),
                     ],
                   ),
-                  IconButton(
-                    icon: Icon(
-                      _sortNewestFirst ? Icons.arrow_downward : Icons.arrow_upward,
-                    ),
-                    tooltip: _sortNewestFirst ? 'Newest first' : 'Oldest first',
-                    color: const Color(0xFF6750A4),
-                    onPressed: _toggleSort,
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          _isSearching ? Icons.close : Icons.search,
+                        ),
+                        tooltip: 'Search',
+                        color: const Color(0xFF6750A4),
+                        onPressed: _toggleSearch,
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _sortNewestFirst ? Icons.arrow_downward : Icons.arrow_upward,
+                        ),
+                        tooltip: _sortNewestFirst ? 'Newest first' : 'Oldest first',
+                        color: const Color(0xFF6750A4),
+                        onPressed: _toggleSort,
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        color: const Color(0xFF6750A4),
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'mark_all':
+                              _markAllComplete();
+                              break;
+                            case 'clear_completed':
+                              if (completedCount > 0) _clearCompleted();
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'mark_all',
+                            child: ListTile(
+                              leading: Icon(Icons.checklist),
+                              title: Text('Mark All Complete'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'clear_completed',
+                            child: ListTile(
+                              leading: Icon(Icons.clear_all),
+                              title: Text('Clear Completed'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            if (_isSearching)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Search tasks...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Row(
+                children: [
+                  _buildFilterChip('All', FilterType.all),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Active', FilterType.active),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Completed', FilterType.completed),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              child: Row(
+                children: [
+                  _buildStatItem('Total', total, const Color(0xFF6750A4)),
+                  const SizedBox(width: 24),
+                  _buildStatItem('Active', activeCount, const Color(0xFF4CAF50)),
+                  const SizedBox(width: 24),
+                  _buildStatItem('Completed', completedCount, const Color(0xFF2196F3)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             Expanded(
               child: !_initialized
                   ? const Center(child: CircularProgressIndicator())
-                  : _tasks.isEmpty
+                  : displayed.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -280,17 +475,35 @@ class _MyHomePageState extends State<MyHomePage> {
                             ],
                           ),
                         )
-                      : AnimatedList(
-                          key: _listKey,
-                          initialItemCount: _tasks.length,
+                      : ListView.builder(
                           padding: const EdgeInsets.only(bottom: 80),
-                          itemBuilder: (context, index, animation) {
-                            return SizeTransition(
-                              sizeFactor: animation,
+                          itemCount: displayed.length,
+                          itemBuilder: (context, index) {
+                            final task = displayed[index];
+                            return Dismissible(
+                              key: ValueKey(task.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 24),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD32F2F),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              onDismissed: (_) => _deleteWithUndo(task),
                               child: TaskCard(
-                                task: _tasks[index],
-                                onToggle: () => _toggleTask(index),
-                                onDelete: () => _confirmDelete(index),
+                                task: task,
+                                onToggle: () => _toggleTask(task),
+                                onDelete: () => _confirmDelete(task),
                               ),
                             );
                           },
@@ -305,6 +518,53 @@ class _MyHomePageState extends State<MyHomePage> {
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, FilterType type) {
+    final selected = _currentFilter == type;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => setState(() => _currentFilter = type),
+      selectedColor: const Color(0xFF6750A4),
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : const Color(0xFF6B7280),
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        fontSize: 13,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      side: BorderSide(
+        color: selected
+            ? const Color(0xFF6750A4)
+            : const Color(0xFF6B7280).withOpacity(0.3),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, int count, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label: $count',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF6B7280),
+          ),
+        ),
+      ],
     );
   }
 }
