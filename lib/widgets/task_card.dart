@@ -4,13 +4,11 @@ import '../models/task.dart';
 class TaskCard extends StatelessWidget {
   final Task task;
   final VoidCallback onToggle;
-  final VoidCallback onDelete;
 
   const TaskCard({
     super.key,
     required this.task,
     required this.onToggle,
-    required this.onDelete,
   });
 
   @override
@@ -30,7 +28,7 @@ class TaskCard extends StatelessWidget {
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        contentPadding: const EdgeInsets.only(left: 8, right: 16, top: 4, bottom: 4),
         leading: Checkbox(
           value: completed,
           onChanged: (_) => onToggle(),
@@ -71,11 +69,6 @@ class TaskCard extends StatelessWidget {
               _CategoryBadge(category: task.category, completed: completed),
             ],
           ),
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline),
-          color: const Color(0xFFD32F2F),
-          onPressed: onDelete,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),

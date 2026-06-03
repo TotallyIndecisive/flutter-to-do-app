@@ -46,6 +46,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final Map<String, dynamic> _taskKeyMap = {};
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _menuKey = GlobalKey();
   bool _initialized = false;
   bool _sortNewestFirst = true;
   bool _isSearching = false;
@@ -130,35 +131,6 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  void _confirmDelete(Task task) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Delete Task'),
-        content: const Text('Are you sure you want to delete this task?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _deleteWithUndo(task);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFD32F2F),
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _toggleTask(Task task) {
     task.isCompleted = !task.isCompleted;
     _taskBox.put(_taskKeyMap[task.id], task);
@@ -204,6 +176,97 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     _tasks.removeWhere((t) => t.isCompleted);
     setState(() {});
+  }
+
+  void _showOverflowMenu() {
+    final buttonCtx = _menuKey.currentContext;
+    if (buttonCtx == null) return;
+
+    final RenderBox button = buttonCtx.findRenderObject() as RenderBox;
+    final Offset offset = button.localToGlobal(Offset.zero);
+    final Size size = button.size;
+
+    const double menuWidth = 220;
+    final double right = offset.dx + size.width;
+    final double top = offset.dy + size.height + 12;
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        right - menuWidth,
+        top,
+        right,
+        top,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          value: 'mark_all',
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: SizedBox(
+            width: menuWidth - 16,
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 40,
+                  child: Icon(Icons.done_all_rounded, size: 22, color: Color(0xFF6750A4)),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Mark All Complete',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1C1B1F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 4),
+        PopupMenuItem<String>(
+          value: 'clear_completed',
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: SizedBox(
+            width: menuWidth - 16,
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 40,
+                  child: Icon(Icons.cleaning_services_rounded, size: 22, color: Color(0xFF6750A4)),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Clear Completed',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1C1B1F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      color: Colors.white.withOpacity(0.95),
+      elevation: 4,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.black.withOpacity(0.15),
+    ).then((value) {
+      if (value == null) return;
+      switch (value) {
+        case 'mark_all':
+          _markAllComplete();
+          break;
+        case 'clear_completed':
+          if (_tasks.where((t) => t.isCompleted).isNotEmpty) _clearCompleted();
+          break;
+      }
+    });
   }
 
   void _showCreateDialog() {
@@ -362,37 +425,11 @@ class _MyHomePageState extends State<MyHomePage> {
                         color: const Color(0xFF6750A4),
                         onPressed: _toggleSort,
                       ),
-                      PopupMenuButton<String>(
+                      IconButton(
+                        key: _menuKey,
                         icon: const Icon(Icons.more_vert),
                         color: const Color(0xFF6750A4),
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'mark_all':
-                              _markAllComplete();
-                              break;
-                            case 'clear_completed':
-                              if (completedCount > 0) _clearCompleted();
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'mark_all',
-                            child: ListTile(
-                              leading: Icon(Icons.checklist),
-                              title: Text('Mark All Complete'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'clear_completed',
-                            child: ListTile(
-                              leading: Icon(Icons.clear_all),
-                              title: Text('Clear Completed'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ],
+                        onPressed: _showOverflowMenu,
                       ),
                     ],
                   ),
@@ -503,7 +540,6 @@ class _MyHomePageState extends State<MyHomePage> {
                               child: TaskCard(
                                 task: task,
                                 onToggle: () => _toggleTask(task),
-                                onDelete: () => _confirmDelete(task),
                               ),
                             );
                           },
@@ -523,14 +559,21 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget _buildFilterChip(String label, FilterType type) {
     final selected = _currentFilter == type;
-    return ChoiceChip(
-      label: Text(label),
+    return FilterChip(
+      label: SizedBox(
+        width: 56,
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+        ),
+      ),
       selected: selected,
       onSelected: (_) => setState(() => _currentFilter = type),
+      showCheckmark: false,
       selectedColor: const Color(0xFF6750A4),
       labelStyle: TextStyle(
         color: selected ? Colors.white : const Color(0xFF6B7280),
-        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        fontWeight: FontWeight.w500,
         fontSize: 13,
       ),
       shape: RoundedRectangleBorder(
