@@ -42,8 +42,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late Box<Task> _taskBox;
+  late Box<String> _categoriesBox;
   final List<Task> _tasks = [];
   final Map<String, dynamic> _taskKeyMap = {};
+  final List<String> _savedCategories = [];
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey _menuKey = GlobalKey();
@@ -77,6 +79,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _initHive() async {
     _taskBox = await Hive.openBox<Task>('tasks');
+    _categoriesBox = await Hive.openBox<String>('categories');
     for (final key in _taskBox.keys) {
       final task = _taskBox.get(key);
       if (task != null) {
@@ -84,9 +87,36 @@ class _MyHomePageState extends State<MyHomePage> {
         _taskKeyMap[task.id] = key;
       }
     }
+    _savedCategories.addAll(_categoriesBox.values);
     _applySort();
     _initialized = true;
     if (mounted) setState(() {});
+  }
+
+  String _normalizeCategory(String name) {
+    return name.trim().toLowerCase();
+  }
+
+  void _saveCustomCategory(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final normalized = _normalizeCategory(trimmed);
+    if (_categoriesBox.containsKey(normalized)) return;
+    if (_savedCategories.length >= 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum of 10 custom categories reached.')),
+      );
+      return;
+    }
+    _categoriesBox.put(normalized, trimmed);
+    _savedCategories.add(trimmed);
+  }
+
+  void _deleteCustomCategory(String name) {
+    final normalized = _normalizeCategory(name);
+    _categoriesBox.delete(normalized);
+    _savedCategories.remove(name);
+    setState(() {});
   }
 
   void _addTask(String title, {
@@ -95,6 +125,9 @@ class _MyHomePageState extends State<MyHomePage> {
     TaskColor taskColor = TaskColor.purple,
   }) {
     if (title.trim().isEmpty) return;
+    if (customCategory != null && customCategory.trim().isNotEmpty) {
+      _saveCustomCategory(customCategory.trim());
+    }
     final task = Task(
       id: _generateId(),
       title: title.trim(),
@@ -278,8 +311,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _showCreateDialog() {
     _controller.clear();
+    TaskCategory selectedCategory = TaskCategory.other;
     TaskColor selectedColor = TaskColor.purple;
     final customCatController = TextEditingController();
+    String? selectedSavedCat;
+    // Snapshot saved categories at dialog open time
+    final currentSaved = List<String>.from(_savedCategories);
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -289,8 +327,10 @@ class _MyHomePageState extends State<MyHomePage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              contentPadding: const EdgeInsets.all(24),
-              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              constraints: const BoxConstraints(maxWidth: 640, minWidth: 360),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              contentPadding: const EdgeInsets.all(28),
+              titlePadding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
               title: const Text(
                 'Create Task',
                 style: TextStyle(
@@ -301,6 +341,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: _controller,
@@ -314,12 +355,180 @@ class _MyHomePageState extends State<MyHomePage> {
                       _addTask(
                         value,
                         customCategory: customCatController.text,
+                        category: selectedCategory,
                         taskColor: selectedColor,
                       );
                       Navigator.pop(ctx);
                     },
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Category',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: TaskCategory.values.map((cat) {
+                      final selected = selectedCategory == cat;
+                      return ChoiceChip(
+                        label: Text(cat.label),
+                        selected: selected,
+                        onSelected: (_) => setDialogState(() {
+                          selectedCategory = cat;
+                          customCatController.clear();
+                          selectedSavedCat = null;
+                        }),
+                        selectedColor: cat.color.withOpacity(0.2),
+                        labelStyle: TextStyle(
+                          color: selected ? cat.color : const Color(0xFF6B7280),
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          fontSize: 13,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide(
+                          color: selected
+                              ? cat.color
+                              : const Color(0xFF6B7280).withOpacity(0.3),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  if (currentSaved.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Saved Categories',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                        Text(
+                          '${currentSaved.length}/10',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: currentSaved.map((cat) {
+                        final isSelected = selectedSavedCat == cat;
+                        return InputChip(
+                          label: Text(
+                            cat,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              color: isSelected
+                                  ? const Color(0xFF6750A4)
+                                  : const Color(0xFF1C1B1F),
+                            ),
+                          ),
+                          selected: isSelected,
+                          showCheckmark: false,
+                          onSelected: (selected) {
+                            setDialogState(() {
+                              if (selected) {
+                                selectedSavedCat = cat;
+                                customCatController.text = cat;
+                              } else {
+                                selectedSavedCat = null;
+                                customCatController.clear();
+                              }
+                            });
+                          },
+                          onDeleted: () {
+                            showDialog(
+                              context: ctx,
+                              builder: (confirmCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                title: const Text('Delete category?'),
+                                content: Text('Delete "$cat"?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(confirmCtx),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      _deleteCustomCategory(cat);
+                                      currentSaved.remove(cat);
+                                      Navigator.pop(confirmCtx);
+                                      setDialogState(() {
+                                        if (selectedSavedCat == cat) {
+                                          selectedSavedCat = null;
+                                          customCatController.clear();
+                                        }
+                                      });
+                                    },
+                                    child: const Text(
+                                      'Delete',
+                                      style: TextStyle(color: Color(0xFFD32F2F)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          selectedColor: const Color(0xFF6750A4).withOpacity(0.12),
+                          surfaceTintColor: Colors.transparent,
+                          side: isSelected
+                              ? const BorderSide(color: Color(0xFF6750A4), width: 1)
+                              : BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          deleteIcon: const Icon(Icons.close, size: 16, color: Color(0xFF9E9E9E)),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: customCatController,
+                    maxLength: 20,
+                    decoration: const InputDecoration(
+                      hintText: 'Custom category (optional)',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      counterText: '',
+                      isDense: true,
+                    ),
+                    onChanged: (_) {
+                      setDialogState(() {
+                        selectedSavedCat = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Colour',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: TaskColor.values.map((c) {
@@ -334,10 +543,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             color: c.color,
                             shape: BoxShape.circle,
                             border: selected
-                                ? Border.all(
-                                    color: Colors.white,
-                                    width: 3,
-                                  )
+                                ? Border.all(color: Colors.white, width: 3)
                                 : null,
                             boxShadow: selected
                                 ? [
@@ -356,19 +562,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: customCatController,
-                    maxLength: 20,
-                    decoration: const InputDecoration(
-                      hintText: 'Custom category (optional)',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      counterText: '',
-                      isDense: true,
-                    ),
-                    onChanged: (_) => setDialogState(() {}),
-                  ),
                 ],
               ),
               actions: [
@@ -384,6 +577,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     _addTask(
                       _controller.text,
                       customCategory: customCatController.text,
+                      category: selectedCategory,
                       taskColor: selectedColor,
                     );
                     Navigator.pop(ctx);
@@ -406,6 +600,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _controller.dispose();
     _searchController.dispose();
     _taskBox.close();
+    _categoriesBox.close();
     super.dispose();
   }
 
@@ -612,11 +807,24 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  double _textWidth(String text, double fontSize, FontWeight fontWeight) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(fontSize: fontSize, fontWeight: fontWeight),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.width;
+  }
+
   Widget _buildFilterChip(String label, FilterType type) {
     final selected = _currentFilter == type;
+    const longest = 'Completed';
+    final labelWidth = _textWidth(longest, 13, FontWeight.w500) + 16;
     return FilterChip(
       label: SizedBox(
-        width: 56,
+        width: labelWidth,
         child: Text(
           label,
           textAlign: TextAlign.center,
