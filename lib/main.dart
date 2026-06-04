@@ -693,14 +693,17 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Row(
-                children: [
-                  _buildFilterChip('All', FilterType.all),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Active', FilterType.active),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Completed', FilterType.completed),
-                ],
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFilterChip('All', FilterType.all),
+                    const SizedBox(width: 12),
+                    _buildFilterChip('Active', FilterType.active),
+                    const SizedBox(width: 12),
+                    _buildFilterChip('Completed', FilterType.completed),
+                  ],
+                ),
               ),
             ),
             Padding(
