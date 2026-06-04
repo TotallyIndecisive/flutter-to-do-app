@@ -329,8 +329,8 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               constraints: const BoxConstraints(maxWidth: 640, minWidth: 360),
               insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-              contentPadding: const EdgeInsets.all(28),
-              titlePadding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
+              contentPadding: const EdgeInsets.all(24),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               title: const Text(
                 'Create Task',
                 style: TextStyle(
@@ -339,10 +339,10 @@ class _MyHomePageState extends State<MyHomePage> {
                   color: Color(0xFF1C1B1F),
                 ),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   TextField(
                     controller: _controller,
                     autofocus: true,
@@ -361,7 +361,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       Navigator.pop(ctx);
                     },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   const Text(
                     'Category',
                     style: TextStyle(
@@ -370,7 +370,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       color: Color(0xFF6B7280),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -402,7 +402,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     }).toList(),
                   ),
                   if (currentSaved.isNotEmpty) ...[
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -424,7 +424,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -502,7 +502,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       }).toList(),
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: customCatController,
                     maxLength: 20,
@@ -519,7 +519,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       });
                     },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   const Text(
                     'Colour',
                     style: TextStyle(
@@ -528,7 +528,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       color: Color(0xFF6B7280),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: TaskColor.values.map((c) {
@@ -563,6 +563,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     }).toList(),
                   ),
                 ],
+              ),
               ),
               actions: [
                 TextButton(
